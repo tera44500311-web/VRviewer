@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#14161B">
+<title>Tilt Viewer — 傾けて覗く動画プレイヤー</title>
+<style>
+  :root{
+    --bg:#14161B;
+    --panel:#1B1F27;
+    --line:#2B313D;
+    --text:#E6E9F0;
+    --dim:#858FA3;
+    --accent:#9BA8FF;
+    --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-tap-highlight-color:transparent}
+  body{display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+
+  #stage{
+    position:relative;flex:1;min-height:0;overflow:hidden;background:#000;
+    touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;
+  }
+  #stage.dragging{cursor:grabbing}
+  video{position:absolute;display:block;will-change:transform;background:#000}
+
+  /* empty state */
+  #empty{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:18px;text-align:center;padding:24px;
+  }
+  #empty p{color:var(--dim);font-size:13px;line-height:1.7;max-width:30ch}
+  #empty.hide{display:none}
+
+  /* the signature: an elevation gauge showing where you are looking within the frame */
+  #gauge{
+    position:absolute;right:14px;top:50%;transform:translateY(-50%);
+    width:2px;height:44%;background:var(--line);border-radius:2px;opacity:0;transition:opacity .3s;
+    pointer-events:none;
+  }
+  #gauge.on{opacity:1}
+  #gauge::before,#gauge::after{
+    content:"";position:absolute;left:-4px;width:10px;height:1px;background:var(--line);
+  }
+  #gauge::before{top:0}#gauge::after{bottom:0}
+  #thumb{
+    position:absolute;left:50%;width:12px;height:12px;margin-left:-6px;margin-top:-6px;
+    border:1.5px solid var(--accent);border-radius:50%;background:rgba(155,168,255,.15);
+    transition:none;
+  }
+  #readout{
+    position:absolute;right:32px;top:50%;transform:translateY(-50%);
+    font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--dim);
+    opacity:0;transition:opacity .3s;pointer-events:none;
+  }
+  #readout.on{opacity:1}
+
+  #hint{
+    position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+    font-size:11px;color:var(--dim);background:rgba(20,22,27,.85);
+    padding:6px 12px;border-radius:999px;border:1px solid var(--line);
+    opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap;
+  }
+  #hint.on{opacity:1}
+
+  /* control bar */
+  #bar{
+    flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);
+    padding:10px 12px 12px;
+  }
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button,.btn{
+    font-family:var(--sans);font-size:13px;color:var(--text);
+    background:transparent;border:1px solid var(--line);border-radius:8px;
+    padding:8px 13px;cursor:pointer;line-height:1;
+  }
+  button:hover,.btn:hover{border-color:var(--accent)}
+  button:active,.btn:active{background:rgba(155,168,255,.1)}
+  button:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button:disabled{opacity:.35;cursor:default}
+  .btn.primary{border-color:var(--accent);color:var(--accent)}
+  input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+
+  #sliders{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-top:12px}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field .lab{display:flex;justify-content:space-between;align-items:baseline}
+  .field label{font-size:11px;color:var(--dim);letter-spacing:.03em}
+  .field .val{font-family:var(--mono);font-size:11px;color:var(--accent)}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line);border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent)}
+  input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+
+  .toggle{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);cursor:pointer}
+  .toggle input{accent-color:var(--accent);width:15px;height:15px}
+
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+  @media (max-width:380px){#sliders{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <video id="v" playsinline webkit-playsinline loop></video>
+
+  <div id="empty">
+    <label class="btn primary" for="file">動画を選ぶ</label>
+    <p>端末を前後に傾けると、映像の見えている範囲が上下に動きます。<br>縦長の動画ほど動く幅が広くなります。</p>
+  </div>
+
+  <div id="gauge"><div id="thumb"></div></div>
+  <div id="readout">0°</div>
+  <div id="hint"></div>
+</div>
+
+<div id="bar">
+  <div class="row">
+    <input type="file" id="file" accept="video/*">
+    <label class="btn" for="file">動画を選ぶ</label>
+    <button id="motion" hidden>傾きを有効にする</button>
+    <button id="center" disabled>いまの角度を中央にする</button>
+    <button id="full">全画面</button>
+  </div>
+
+  <div id="sliders">
+    <div class="field">
+      <div class="lab"><label for="zoom">ズーム</label><span class="val" id="zoomV">1.50×</span></div>
+      <input type="range" id="zoom" min="1" max="3" step="0.05" value="1.5">
+    </div>
+    <div class="field">
+      <div class="lab"><label for="range">端まで傾ける角度</label><span class="val" id="rangeV">25°</span></div>
+      <input type="range" id="range" min="8" max="60" step="1" value="25">
+    </div>
+    <div class="field">
+      <div class="lab"><label for="smooth">追従のなめらかさ</label><span class="val" id="smoothV">0.12</span></div>
+      <input type="range" id="smooth" min="0.02" max="0.5" step="0.01" value="0.12">
+    </div>
+    <div class="field" style="justify-content:flex-end">
+      <label class="toggle"><input type="checkbox" id="useX"> 左右の傾きでも動かす</label>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const v     = document.getElementById('v');
+  const empty = document.getElementById('empty');
+  const gauge = document.getElementById('gauge');
+  const thumb = document.getElementById('thumb');
+  const readout = document.getElementById('readout');
+  const hint  = document.getElementById('hint');
+  const fileEl= document.getElementById('file');
+  const motionBtn = document.getElementById('motion');
+  const centerBtn = document.getElementById('center');
+  const fullBtn   = document.getElementById('full');
+
+  const zoomEl=document.getElementById('zoom'), zoomV=document.getElementById('zoomV');
+  const rangeEl=document.getElementById('range'), rangeV=document.getElementById('rangeV');
+  const smoothEl=document.getElementById('smooth'), smoothV=document.getElementById('smoothV');
+  const useXEl=document.getElementById('useX');
+
+  let vw=0, vh=0, maxX=0, maxY=0;
+  let zoom=1.5, rangeDeg=25, smooth=0.12, useX=false;
+
+  let pitch=0, roll=0;            // screen-space tilt, degrees
+  let originP=null, originR=0;    // calibration
+  let gyroSeen=false;
+  let curX=0, curY=0;             // current pan (px)
+  let dragOffX=0, dragOffY=0;     // manual pan when no gyro
+
+  /* ---------- layout ---------- */
+  function layout(){
+    if(!vw) return;
+    const sw=stage.clientWidth, sh=stage.clientHeight;
+    const s=Math.min(sw/vw, sh/vh)*zoom;
+    const w=vw*s, h=vh*s;
+    v.style.width=w+'px'; v.style.height=h+'px';
+    v.style.left=((sw-w)/2)+'px'; v.style.top=((sh-h)/2)+'px';
+    maxX=Math.max(0,(w-sw)/2);
+    maxY=Math.max(0,(h-sh)/2);
+  }
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', ()=>setTimeout(layout,300));
+
+  /* ---------- orientation → screen space ---------- */
+  function screenAngle(){
+    if(screen.orientation && typeof screen.orientation.angle==='number') return screen.orientation.angle;
+    if(typeof window.orientation==='number') return (window.orientation+360)%360;
+    return 0;
+  }
+  function onOrient(e){
+    if(e.beta===null && e.gamma===null) return;
+    const b=e.beta||0, g=e.gamma||0;
+    const a=screenAngle();
+    if(a===90){       pitch=-g; roll= b; }
+    else if(a===270||a===-90){ pitch= g; roll=-b; }
+    else if(a===180){ pitch=-b; roll=-g; }
+    else{             pitch= b; roll= g; }
+
+    if(!gyroSeen){
+      gyroSeen=true;
+      originP=pitch; originR=roll;
+      centerBtn.disabled=false;
+      gauge.classList.add('on'); readout.classList.add('on');
+      showHint('傾きを検出しました', 1800);
+    }
+  }
+
+  function startMotion(){
+    const D=window.DeviceOrientationEvent;
+    if(!D){ showHint('この端末では傾きセンサーが使えません', 3000); return; }
+    if(typeof D.requestPermission==='function'){
+      D.requestPermission().then(r=>{
+        if(r==='granted'){ window.addEventListener('deviceorientation', onOrient); motionBtn.hidden=true; }
+        else showHint('傾きの利用が許可されませんでした', 3000);
+      }).catch(()=>showHint('傾きの利用を開始できませんでした', 3000));
+    }else{
+      window.addEventListener('deviceorientation', onOrient);
+      motionBtn.hidden=true;
+    }
+  }
+  if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
+    motionBtn.hidden=false;            // iOS: needs an explicit tap
+  }else{
+    window.addEventListener('deviceorientation', onOrient);
+  }
+  motionBtn.addEventListener('click', startMotion);
+
+  centerBtn.addEventListener('click', ()=>{
+    originP=pitch; originR=roll;
+    showHint('中央をリセットしました', 1500);
+  });
+
+  /* ---------- render loop ---------- */
+  function clamp(x,a,b){ return x<a?a:(x>b?b:x); }
+
+  function frame(){
+    let tX=0, tY=0, deg=0;
+    if(gyroSeen && originP!==null){
+      deg = pitch - originP;
+      tY  = clamp(deg/rangeDeg, -1, 1) * maxY;
+      if(useX){
+        const dR = roll - originR;
+        tX = clamp(dR/rangeDeg, -1, 1) * maxX;
+      }
+    }else{
+      tX = clamp(dragOffX, -maxX, maxX);
+      tY = clamp(dragOffY, -maxY, maxY);
+    }
+    curX += (tX-curX)*smooth;
+    curY += (tY-curY)*smooth;
+    v.style.transform = 'translate3d('+curX.toFixed(2)+'px,'+curY.toFixed(2)+'px,0)';
+
+    if(maxY>0){
+      const n = clamp(-curY/maxY, -1, 1);          // +1 = looking up
+      thumb.style.top = ((0.5 - n*0.5)*100)+'%';
+    }
+    if(gyroSeen) readout.textContent = (deg>0?'+':'') + deg.toFixed(0) + '\u00B0';
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ---------- pointer fallback (desktop / no gyro) ---------- */
+  let dragging=false, lastPX=0, lastPY=0, moved=0;
+  stage.addEventListener('pointerdown', e=>{
+    dragging=true; moved=0; lastPX=e.clientX; lastPY=e.clientY;
+    stage.classList.add('dragging'); stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const dx=e.clientX-lastPX, dy=e.clientY-lastPY;
+    lastPX=e.clientX; lastPY=e.clientY; moved+=Math.abs(dx)+Math.abs(dy);
+    if(!gyroSeen){ dragOffX+=dx; dragOffY+=dy; }
+  });
+  stage.addEventListener('pointerup', e=>{
+    dragging=false; stage.classList.remove('dragging');
+    if(moved<6 && v.src){ v.paused ? v.play().catch(()=>{}) : v.pause(); }
+  });
+  stage.addEventListener('pointercancel', ()=>{ dragging=false; stage.classList.remove('dragging'); });
+
+  /* ---------- file ---------- */
+  fileEl.addEventListener('change', ()=>{
+    const f=fileEl.files && fileEl.files[0];
+    if(!f) return;
+    if(v.src) URL.revokeObjectURL(v.src);
+    v.src=URL.createObjectURL(f);
+    v.load();
+    v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); showHint('タップで再生', 3000); });
+    empty.classList.add('hide');
+    if(!gyroSeen && !motionBtn.hidden) showHint('「傾きを有効にする」を押してください', 3500);
+    else if(!gyroSeen) showHint('ドラッグでも動かせます', 2500);
+  });
+
+  v.addEventListener('loadedmetadata', ()=>{
+    vw=v.videoWidth; vh=v.videoHeight; layout();
+  });
+
+  /* ---------- controls ---------- */
+  zoomEl.addEventListener('input', ()=>{ zoom=+zoomEl.value; zoomV.textContent=zoom.toFixed(2)+'\u00D7'; layout(); });
+  rangeEl.addEventListener('input', ()=>{ rangeDeg=+rangeEl.value; rangeV.textContent=rangeDeg+'\u00B0'; });
+  smoothEl.addEventListener('input', ()=>{ smooth=+smoothEl.value; smoothV.textContent=smooth.toFixed(2); });
+  useXEl.addEventListener('change', ()=>{ useX=useXEl.checked; });
+
+  if(!document.documentElement.requestFullscreen && !stage.webkitRequestFullscreen){
+    fullBtn.hidden=true;                     // iPhone Safari has no Fullscreen API
+  }
+  fullBtn.addEventListener('click', ()=>{
+    if(document.fullscreenElement){ document.exitFullscreen(); return; }
+    const el=document.documentElement;
+    (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el);
+  });
+
+  let hintT=null;
+  function showHint(msg, ms){
+    hint.textContent=msg; hint.classList.add('on');
+    clearTimeout(hintT); hintT=setTimeout(()=>hint.classList.remove('on'), ms||2000);
+  }
+})();
+</script>
+</body>
+</html>
