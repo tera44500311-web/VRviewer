@@ -97,6 +97,15 @@
   .toggle{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);cursor:pointer}
   .toggle input{accent-color:var(--accent);width:15px;height:15px}
 
+  #urlRow{margin-top:8px}
+  #urlRow[hidden]{display:none}
+  input[type=url]{
+    flex:1;min-width:0;font-family:var(--mono);font-size:12px;color:var(--text);
+    background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+  }
+  input[type=url]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  #note{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.6}
+
   @media (prefers-reduced-motion: reduce){*{transition:none!important}}
   @media (max-width:380px){#sliders{grid-template-columns:1fr}}
 </style>
@@ -104,7 +113,7 @@
 <body>
 
 <div id="stage">
-  <video id="v" playsinline webkit-playsinline loop></video>
+  <video id="v" playsinline webkit-playsinline loop preload="auto"></video>
 
   <div id="empty">
     <label class="btn primary" for="file">動画を選ぶ</label>
@@ -120,10 +129,17 @@
   <div class="row">
     <input type="file" id="file" accept="video/*">
     <label class="btn" for="file">動画を選ぶ</label>
+    <button id="urlToggle">URLで読み込む</button>
     <button id="motion" hidden>傾きを有効にする</button>
     <button id="center" disabled>いまの角度を中央にする</button>
     <button id="full">全画面</button>
   </div>
+
+  <div class="row" id="urlRow" hidden>
+    <input type="url" id="urlInput" placeholder="https://.../video.mp4" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <button id="urlLoad" class="btn primary">読み込む</button>
+  </div>
+  <p id="note" hidden>大きいファイルは、ローカル選択より動画自体をGitHub Pages等に置いてURLで読み込む方が途切れにくくなります。</p>
 
   <div id="sliders">
     <div class="field">
@@ -154,6 +170,11 @@
   const readout = document.getElementById('readout');
   const hint  = document.getElementById('hint');
   const fileEl= document.getElementById('file');
+  const urlToggle=document.getElementById('urlToggle');
+  const urlRow=document.getElementById('urlRow');
+  const urlInput=document.getElementById('urlInput');
+  const urlLoad=document.getElementById('urlLoad');
+  const note=document.getElementById('note');
   const motionBtn = document.getElementById('motion');
   const centerBtn = document.getElementById('center');
   const fullBtn   = document.getElementById('full');
@@ -283,21 +304,58 @@
   });
   stage.addEventListener('pointercancel', ()=>{ dragging=false; stage.classList.remove('dragging'); });
 
-  /* ---------- file ---------- */
-  fileEl.addEventListener('change', ()=>{
-    const f=fileEl.files && fileEl.files[0];
-    if(!f) return;
-    if(v.src) URL.revokeObjectURL(v.src);
-    v.src=URL.createObjectURL(f);
-    v.load();
-    v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); showHint('タップで再生', 3000); });
+  /* ---------- source loading (local file or URL) ---------- */
+  let objectUrl=null;
+  function afterLoadStart(){
     empty.classList.add('hide');
     if(!gyroSeen && !motionBtn.hidden) showHint('「傾きを有効にする」を押してください', 3500);
     else if(!gyroSeen) showHint('ドラッグでも動かせます', 2500);
+  }
+  function loadFromFile(f){
+    if(objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl=URL.createObjectURL(f);
+    v.src=objectUrl;
+    v.load();
+    v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); showHint('タップで再生', 3000); });
+    afterLoadStart();
+    note.hidden = f.size < 150*1024*1024;   // nudge toward URL loading for big local files
+  }
+  function loadFromUrl(url){
+    if(!url) return;
+    if(objectUrl){ URL.revokeObjectURL(objectUrl); objectUrl=null; }
+    v.src=url;
+    v.load();
+    v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); showHint('タップで再生', 3000); });
+    afterLoadStart();
+    note.hidden=true;
+  }
+
+  fileEl.addEventListener('change', ()=>{
+    const f=fileEl.files && fileEl.files[0];
+    if(f) loadFromFile(f);
   });
+
+  urlToggle.addEventListener('click', ()=>{
+    urlRow.hidden=!urlRow.hidden;
+    if(!urlRow.hidden) urlInput.focus();
+  });
+  urlLoad.addEventListener('click', ()=> loadFromUrl(urlInput.value.trim()));
+  urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') loadFromUrl(urlInput.value.trim()); });
 
   v.addEventListener('loadedmetadata', ()=>{
     vw=v.videoWidth; vh=v.videoHeight; layout();
+  });
+
+  /* buffering / stall feedback so a stopped video reads as "loading", not "broken" */
+  let stallT=null;
+  v.addEventListener('waiting', ()=>{ clearTimeout(stallT); stallT=setTimeout(()=>showHint('バッファ中…',30000),300); });
+  v.addEventListener('stalled', ()=>{ clearTimeout(stallT); stallT=setTimeout(()=>showHint('読み込みが止まっています…',30000),300); });
+  v.addEventListener('playing', ()=>{ clearTimeout(stallT); hint.classList.remove('on'); });
+  v.addEventListener('canplay', ()=>{ clearTimeout(stallT); hint.classList.remove('on'); });
+  v.addEventListener('error', ()=>{
+    const msgs={1:'読み込みが中断されました',2:'ネットワークエラーで読み込めません',3:'このファイルをデコードできません',4:'この形式/URLは再生できません'};
+    const code=v.error?v.error.code:0;
+    showHint('再生エラー: '+(msgs[code]||'不明なエラー'), 8000);
   });
 
   /* ---------- controls ---------- */
