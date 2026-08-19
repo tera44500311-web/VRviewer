@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#14161B">
-<title>Tilt Viewer — 傾けて覗く動画プレイヤー</title>
+<title>Tilt Viewer</title>
 <style>
   :root{
     --bg:#14161B;
@@ -25,89 +25,72 @@
     touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;
   }
   #stage.dragging{cursor:grabbing}
-  video{position:absolute;display:block;will-change:transform;background:#000}
+  video{position:absolute;display:block;background:#000}
 
-  /* empty state */
   #empty{
     position:absolute;inset:0;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:18px;text-align:center;padding:24px;
+    align-items:center;justify-content:center;gap:16px;text-align:center;padding:24px;
   }
   #empty p{color:var(--dim);font-size:13px;line-height:1.7;max-width:30ch}
   #empty.hide{display:none}
 
-  /* the signature: an elevation gauge showing where you are looking within the frame */
+  /* elevation gauge: where you are looking inside the frame */
   #gauge{
-    position:absolute;right:14px;top:50%;transform:translateY(-50%);
-    width:2px;height:44%;background:var(--line);border-radius:2px;opacity:0;transition:opacity .3s;
-    pointer-events:none;
+    position:absolute;right:12px;top:50%;transform:translateY(-50%);
+    width:2px;height:42%;background:var(--line);border-radius:2px;opacity:0;
+    transition:opacity .3s;pointer-events:none;
   }
   #gauge.on{opacity:1}
-  #gauge::before,#gauge::after{
-    content:"";position:absolute;left:-4px;width:10px;height:1px;background:var(--line);
-  }
+  #gauge::before,#gauge::after{content:"";position:absolute;left:-4px;width:10px;height:1px;background:var(--line)}
   #gauge::before{top:0}#gauge::after{bottom:0}
   #thumb{
-    position:absolute;left:50%;width:12px;height:12px;margin-left:-6px;margin-top:-6px;
+    position:absolute;left:50%;width:11px;height:11px;margin-left:-5.5px;margin-top:-5.5px;
     border:1.5px solid var(--accent);border-radius:50%;background:rgba(155,168,255,.15);
-    transition:none;
   }
-  #readout{
-    position:absolute;right:32px;top:50%;transform:translateY(-50%);
-    font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--dim);
-    opacity:0;transition:opacity .3s;pointer-events:none;
-  }
-  #readout.on{opacity:1}
-
   #hint{
-    position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+    position:absolute;left:50%;bottom:14px;transform:translateX(-50%);
     font-size:11px;color:var(--dim);background:rgba(20,22,27,.85);
-    padding:6px 12px;border-radius:999px;border:1px solid var(--line);
+    padding:5px 11px;border-radius:999px;border:1px solid var(--line);
     opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap;
   }
   #hint.on{opacity:1}
 
-  /* control bar */
-  #bar{
-    flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);
-    padding:10px 12px 12px;
-  }
-  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* ---- compact control bar ---- */
+  #bar{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);padding:6px 10px 8px}
+
+  #seekRow{display:flex;align-items:center;gap:8px}
+  .time{font-family:var(--mono);font-size:10px;color:var(--dim);flex:0 0 auto;min-width:34px}
+  .time.r{text-align:right}
+  #seek{flex:1;min-width:0}
+
+  #ctl{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+  #ctl.hide{display:none}
+
   button,.btn{
-    font-family:var(--sans);font-size:13px;color:var(--text);
-    background:transparent;border:1px solid var(--line);border-radius:8px;
-    padding:8px 13px;cursor:pointer;line-height:1;
+    font-family:var(--sans);font-size:12px;color:var(--text);
+    background:transparent;border:1px solid var(--line);border-radius:7px;
+    padding:6px 10px;cursor:pointer;line-height:1;white-space:nowrap;
   }
   button:hover,.btn:hover{border-color:var(--accent)}
   button:active,.btn:active{background:rgba(155,168,255,.1)}
   button:focus-visible,.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   button:disabled{opacity:.35;cursor:default}
-  .btn.primary{border-color:var(--accent);color:var(--accent)}
+  .btn.primary,button.primary{border-color:var(--accent);color:var(--accent)}
   input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
 
-  #sliders{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-top:12px}
-  .field{display:flex;flex-direction:column;gap:5px}
-  .field .lab{display:flex;justify-content:space-between;align-items:baseline}
-  .field label{font-size:11px;color:var(--dim);letter-spacing:.03em}
-  .field .val{font-family:var(--mono);font-size:11px;color:var(--accent)}
+  #zoomWrap{display:flex;align-items:center;gap:7px;flex:1;min-width:110px}
+  #zoomWrap label{font-size:10px;color:var(--dim);flex:0 0 auto}
+  #zoomV{font-family:var(--mono);font-size:10px;color:var(--accent);flex:0 0 auto;min-width:32px}
+
   input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--line);border-radius:2px}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent)}
-  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border:0;border-radius:50%;background:var(--accent)}
   input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+  input[type=range]:disabled{opacity:.4}
 
-  .toggle{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);cursor:pointer}
-  .toggle input{accent-color:var(--accent);width:15px;height:15px}
-
-  #urlRow{margin-top:8px}
-  #urlRow[hidden]{display:none}
-  input[type=url]{
-    flex:1;min-width:0;font-family:var(--mono);font-size:12px;color:var(--text);
-    background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
-  }
-  input[type=url]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-  #note{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.6}
+  #fold{padding:6px 9px;font-size:11px;color:var(--dim);flex:0 0 auto}
 
   @media (prefers-reduced-motion: reduce){*{transition:none!important}}
-  @media (max-width:380px){#sliders{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -117,87 +100,71 @@
 
   <div id="empty">
     <label class="btn primary" for="file">動画を選ぶ</label>
-    <p>端末を前後に傾けると、映像の見えている範囲が上下に動きます。<br>縦長の動画ほど動く幅が広くなります。</p>
+    <p>端末を傾けると、映像の見えている範囲が動きます。<br>縦長の動画ほど動く幅が広くなります。</p>
   </div>
 
   <div id="gauge"><div id="thumb"></div></div>
-  <div id="readout">0°</div>
   <div id="hint"></div>
 </div>
 
 <div id="bar">
-  <div class="row">
+  <div id="seekRow">
+    <span class="time" id="tCur">0:00</span>
+    <input type="range" id="seek" min="0" max="1000" value="0" step="1" disabled aria-label="再生位置">
+    <span class="time r" id="tDur">0:00</span>
+    <button id="fold" aria-expanded="true" title="操作パネルの表示切替">▾</button>
+  </div>
+
+  <div id="ctl">
     <input type="file" id="file" accept="video/*">
-    <label class="btn" for="file">動画を選ぶ</label>
-    <button id="urlToggle">URLで読み込む</button>
-    <button id="motion" hidden>傾きを有効にする</button>
-    <button id="center" disabled>いまの角度を中央にする</button>
+    <label class="btn" for="file">動画</label>
+    <button id="motion" hidden>傾きON</button>
+    <button id="center" disabled>中央</button>
+    <button id="normal">通常再生</button>
     <button id="full">全画面</button>
-  </div>
-
-  <div class="row" id="urlRow" hidden>
-    <input type="url" id="urlInput" placeholder="https://.../video.mp4" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">
-    <button id="urlLoad" class="btn primary">読み込む</button>
-  </div>
-  <p id="note" hidden>大きいファイルは、ローカル選択より動画自体をGitHub Pages等に置いてURLで読み込む方が途切れにくくなります。</p>
-
-  <div id="sliders">
-    <div class="field">
-      <div class="lab"><label for="zoom">ズーム</label><span class="val" id="zoomV">1.50×</span></div>
+    <span id="zoomWrap">
+      <label for="zoom">ズーム</label>
       <input type="range" id="zoom" min="1" max="3" step="0.05" value="1.5">
-    </div>
-    <div class="field">
-      <div class="lab"><label for="range">端まで傾ける角度</label><span class="val" id="rangeV">25°</span></div>
-      <input type="range" id="range" min="8" max="60" step="1" value="25">
-    </div>
-    <div class="field">
-      <div class="lab"><label for="smooth">追従のなめらかさ</label><span class="val" id="smoothV">0.12</span></div>
-      <input type="range" id="smooth" min="0.02" max="0.5" step="0.01" value="0.12">
-    </div>
-    <div class="field" style="justify-content:flex-end">
-      <label class="toggle"><input type="checkbox" id="useX"> 左右の傾きでも動かす</label>
-    </div>
+      <span id="zoomV">1.50×</span>
+    </span>
   </div>
 </div>
 
 <script>
 (function(){
-  const stage = document.getElementById('stage');
-  const v     = document.getElementById('v');
-  const empty = document.getElementById('empty');
-  const gauge = document.getElementById('gauge');
-  const thumb = document.getElementById('thumb');
-  const readout = document.getElementById('readout');
-  const hint  = document.getElementById('hint');
-  const fileEl= document.getElementById('file');
-  const urlToggle=document.getElementById('urlToggle');
-  const urlRow=document.getElementById('urlRow');
-  const urlInput=document.getElementById('urlInput');
-  const urlLoad=document.getElementById('urlLoad');
-  const note=document.getElementById('note');
-  const motionBtn = document.getElementById('motion');
-  const centerBtn = document.getElementById('center');
-  const fullBtn   = document.getElementById('full');
+  /* fixed tuning — previously exposed as sliders */
+  const RANGE_DEG = 25;    // tilt needed to reach the edge
+  const SMOOTH    = 0.2;   // follow easing
+  const USE_X     = true;  // left/right tilt always active
 
+  const stage=document.getElementById('stage');
+  const v=document.getElementById('v');
+  const empty=document.getElementById('empty');
+  const gauge=document.getElementById('gauge');
+  const thumb=document.getElementById('thumb');
+  const hint=document.getElementById('hint');
+
+  const fileEl=document.getElementById('file');
+  const motionBtn=document.getElementById('motion');
+  const centerBtn=document.getElementById('center');
+  const normalBtn=document.getElementById('normal');
+  const fullBtn=document.getElementById('full');
   const zoomEl=document.getElementById('zoom'), zoomV=document.getElementById('zoomV');
-  const rangeEl=document.getElementById('range'), rangeV=document.getElementById('rangeV');
-  const smoothEl=document.getElementById('smooth'), smoothV=document.getElementById('smoothV');
-  const useXEl=document.getElementById('useX');
+  const seek=document.getElementById('seek'), tCur=document.getElementById('tCur'), tDur=document.getElementById('tDur');
+  const foldBtn=document.getElementById('fold'), ctl=document.getElementById('ctl');
 
   let vw=0, vh=0, maxX=0, maxY=0;
-  let zoom=1.5, rangeDeg=25, smooth=0.12, useX=false;
+  let zoom=1.5, normalMode=false;
+  let pitch=0, roll=0, originP=null, originR=0, gyroSeen=false;
+  let curX=0, curY=0, dragOffX=0, dragOffY=0;
 
-  let pitch=0, roll=0;            // screen-space tilt, degrees
-  let originP=null, originR=0;    // calibration
-  let gyroSeen=false;
-  let curX=0, curY=0;             // current pan (px)
-  let dragOffX=0, dragOffY=0;     // manual pan when no gyro
+  const effZoom = ()=> normalMode ? 1 : zoom;
 
   /* ---------- layout ---------- */
   function layout(){
     if(!vw) return;
     const sw=stage.clientWidth, sh=stage.clientHeight;
-    const s=Math.min(sw/vw, sh/vh)*zoom;
+    const s=Math.min(sw/vw, sh/vh)*effZoom();
     const w=vw*s, h=vh*s;
     v.style.width=w+'px'; v.style.height=h+'px';
     v.style.left=((sw-w)/2)+'px'; v.style.top=((sh-h)/2)+'px';
@@ -207,7 +174,7 @@
   window.addEventListener('resize', layout);
   window.addEventListener('orientationchange', ()=>setTimeout(layout,300));
 
-  /* ---------- orientation → screen space ---------- */
+  /* ---------- tilt ---------- */
   function screenAngle(){
     if(screen.orientation && typeof screen.orientation.angle==='number') return screen.orientation.angle;
     if(typeof window.orientation==='number') return (window.orientation+360)%360;
@@ -215,168 +182,157 @@
   }
   function onOrient(e){
     if(e.beta===null && e.gamma===null) return;
-    const b=e.beta||0, g=e.gamma||0;
-    const a=screenAngle();
-    if(a===90){       pitch=-g; roll= b; }
-    else if(a===270||a===-90){ pitch= g; roll=-b; }
+    const b=e.beta||0, g=e.gamma||0, a=screenAngle();
+    if(a===90){ pitch=-g; roll=b; }
+    else if(a===270||a===-90){ pitch=g; roll=-b; }
     else if(a===180){ pitch=-b; roll=-g; }
-    else{             pitch= b; roll= g; }
+    else{ pitch=b; roll=g; }
 
     if(!gyroSeen){
-      gyroSeen=true;
-      originP=pitch; originR=roll;
+      gyroSeen=true; originP=pitch; originR=roll;
       centerBtn.disabled=false;
-      gauge.classList.add('on'); readout.classList.add('on');
-      showHint('傾きを検出しました', 1800);
+      if(!normalMode) gauge.classList.add('on');
+      showHint('傾きを検出しました',1600);
     }
   }
-
   function startMotion(){
     const D=window.DeviceOrientationEvent;
-    if(!D){ showHint('この端末では傾きセンサーが使えません', 3000); return; }
+    if(!D){ showHint('この端末では傾きセンサーが使えません',3000); return; }
     if(typeof D.requestPermission==='function'){
       D.requestPermission().then(r=>{
-        if(r==='granted'){ window.addEventListener('deviceorientation', onOrient); motionBtn.hidden=true; }
-        else showHint('傾きの利用が許可されませんでした', 3000);
-      }).catch(()=>showHint('傾きの利用を開始できませんでした', 3000));
+        if(r==='granted'){ window.addEventListener('deviceorientation',onOrient); motionBtn.hidden=true; }
+        else showHint('傾きの利用が許可されませんでした',3000);
+      }).catch(()=>showHint('傾きの利用を開始できませんでした',3000));
     }else{
-      window.addEventListener('deviceorientation', onOrient);
-      motionBtn.hidden=true;
+      window.addEventListener('deviceorientation',onOrient); motionBtn.hidden=true;
     }
   }
   if(window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission==='function'){
-    motionBtn.hidden=false;            // iOS: needs an explicit tap
+    motionBtn.hidden=false;                       // iOS needs an explicit tap
   }else{
     window.addEventListener('deviceorientation', onOrient);
   }
   motionBtn.addEventListener('click', startMotion);
-
-  centerBtn.addEventListener('click', ()=>{
-    originP=pitch; originR=roll;
-    showHint('中央をリセットしました', 1500);
-  });
+  centerBtn.addEventListener('click', ()=>{ originP=pitch; originR=roll; showHint('中央をリセットしました',1400); });
 
   /* ---------- render loop ---------- */
-  function clamp(x,a,b){ return x<a?a:(x>b?b:x); }
-
+  const clamp=(x,a,b)=> x<a?a:(x>b?b:x);
   function frame(){
-    let tX=0, tY=0, deg=0;
-    if(gyroSeen && originP!==null){
-      deg = pitch - originP;
-      tY  = clamp(deg/rangeDeg, -1, 1) * maxY;
-      if(useX){
-        const dR = roll - originR;
-        tX = clamp(dR/rangeDeg, -1, 1) * maxX;
+    let tX=0,tY=0;
+    if(!normalMode){
+      if(gyroSeen && originP!==null){
+        tY=clamp((pitch-originP)/RANGE_DEG,-1,1)*maxY;
+        if(USE_X) tX=clamp((roll-originR)/RANGE_DEG,-1,1)*maxX;
+      }else{
+        tX=clamp(dragOffX,-maxX,maxX);
+        tY=clamp(dragOffY,-maxY,maxY);
       }
-    }else{
-      tX = clamp(dragOffX, -maxX, maxX);
-      tY = clamp(dragOffY, -maxY, maxY);
     }
-    curX += (tX-curX)*smooth;
-    curY += (tY-curY)*smooth;
-    v.style.transform = 'translate3d('+curX.toFixed(2)+'px,'+curY.toFixed(2)+'px,0)';
-
-    if(maxY>0){
-      const n = clamp(-curY/maxY, -1, 1);          // +1 = looking up
-      thumb.style.top = ((0.5 - n*0.5)*100)+'%';
-    }
-    if(gyroSeen) readout.textContent = (deg>0?'+':'') + deg.toFixed(0) + '\u00B0';
-
+    curX+=(tX-curX)*SMOOTH;
+    curY+=(tY-curY)*SMOOTH;
+    v.style.transform='translate3d('+curX.toFixed(2)+'px,'+curY.toFixed(2)+'px,0)';
+    if(maxY>0 && !normalMode) thumb.style.top=((0.5-clamp(-curY/maxY,-1,1)*0.5)*100)+'%';
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
 
-  /* ---------- pointer fallback (desktop / no gyro) ---------- */
-  let dragging=false, lastPX=0, lastPY=0, moved=0;
-  stage.addEventListener('pointerdown', e=>{
-    dragging=true; moved=0; lastPX=e.clientX; lastPY=e.clientY;
-    stage.classList.add('dragging'); stage.setPointerCapture(e.pointerId);
+  /* ---------- drag fallback ---------- */
+  let dragging=false,lastPX=0,lastPY=0,moved=0;
+  stage.addEventListener('pointerdown',e=>{
+    dragging=true;moved=0;lastPX=e.clientX;lastPY=e.clientY;
+    stage.classList.add('dragging');stage.setPointerCapture(e.pointerId);
   });
-  stage.addEventListener('pointermove', e=>{
+  stage.addEventListener('pointermove',e=>{
     if(!dragging) return;
-    const dx=e.clientX-lastPX, dy=e.clientY-lastPY;
-    lastPX=e.clientX; lastPY=e.clientY; moved+=Math.abs(dx)+Math.abs(dy);
-    if(!gyroSeen){ dragOffX+=dx; dragOffY+=dy; }
+    const dx=e.clientX-lastPX,dy=e.clientY-lastPY;
+    lastPX=e.clientX;lastPY=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
+    if(!gyroSeen && !normalMode){ dragOffX+=dx; dragOffY+=dy; }
   });
-  stage.addEventListener('pointerup', e=>{
-    dragging=false; stage.classList.remove('dragging');
+  stage.addEventListener('pointerup',()=>{
+    dragging=false;stage.classList.remove('dragging');
     if(moved<6 && v.src){ v.paused ? v.play().catch(()=>{}) : v.pause(); }
   });
-  stage.addEventListener('pointercancel', ()=>{ dragging=false; stage.classList.remove('dragging'); });
+  stage.addEventListener('pointercancel',()=>{dragging=false;stage.classList.remove('dragging');});
 
-  /* ---------- source loading (local file or URL) ---------- */
+  /* ---------- file ---------- */
   let objectUrl=null;
-  function afterLoadStart(){
-    empty.classList.add('hide');
-    if(!gyroSeen && !motionBtn.hidden) showHint('「傾きを有効にする」を押してください', 3500);
-    else if(!gyroSeen) showHint('ドラッグでも動かせます', 2500);
-  }
-  function loadFromFile(f){
+  fileEl.addEventListener('change',()=>{
+    const f=fileEl.files&&fileEl.files[0];
+    if(!f) return;
     if(objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl=URL.createObjectURL(f);
-    v.src=objectUrl;
-    v.load();
-    v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); showHint('タップで再生', 3000); });
-    afterLoadStart();
-    note.hidden = f.size < 150*1024*1024;   // nudge toward URL loading for big local files
-  }
-  function loadFromUrl(url){
-    if(!url) return;
-    if(objectUrl){ URL.revokeObjectURL(objectUrl); objectUrl=null; }
-    v.src=url;
-    v.load();
-    v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); showHint('タップで再生', 3000); });
-    afterLoadStart();
-    note.hidden=true;
-  }
-
-  fileEl.addEventListener('change', ()=>{
-    const f=fileEl.files && fileEl.files[0];
-    if(f) loadFromFile(f);
+    v.src=objectUrl; v.load();
+    v.play().catch(()=>{ v.muted=true; v.play().catch(()=>{}); showHint('タップで再生',2500); });
+    empty.classList.add('hide');
+    if(!gyroSeen && !motionBtn.hidden) showHint('「傾きON」を押してください',3000);
   });
 
-  urlToggle.addEventListener('click', ()=>{
-    urlRow.hidden=!urlRow.hidden;
-    if(!urlRow.hidden) urlInput.focus();
-  });
-  urlLoad.addEventListener('click', ()=> loadFromUrl(urlInput.value.trim()));
-  urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') loadFromUrl(urlInput.value.trim()); });
-
-  v.addEventListener('loadedmetadata', ()=>{
+  v.addEventListener('loadedmetadata',()=>{
     vw=v.videoWidth; vh=v.videoHeight; layout();
+    seek.disabled=false;
+    tDur.textContent=fmt(v.duration);
   });
 
-  /* buffering / stall feedback so a stopped video reads as "loading", not "broken" */
-  let stallT=null;
-  v.addEventListener('waiting', ()=>{ clearTimeout(stallT); stallT=setTimeout(()=>showHint('バッファ中…',30000),300); });
-  v.addEventListener('stalled', ()=>{ clearTimeout(stallT); stallT=setTimeout(()=>showHint('読み込みが止まっています…',30000),300); });
-  v.addEventListener('playing', ()=>{ clearTimeout(stallT); hint.classList.remove('on'); });
-  v.addEventListener('canplay', ()=>{ clearTimeout(stallT); hint.classList.remove('on'); });
-  v.addEventListener('error', ()=>{
-    const msgs={1:'読み込みが中断されました',2:'ネットワークエラーで読み込めません',3:'このファイルをデコードできません',4:'この形式/URLは再生できません'};
-    const code=v.error?v.error.code:0;
-    showHint('再生エラー: '+(msgs[code]||'不明なエラー'), 8000);
+  /* ---------- seek ---------- */
+  function fmt(t){
+    if(!isFinite(t)||t<0) return '0:00';
+    const m=Math.floor(t/60), s=Math.floor(t%60);
+    return m+':'+(s<10?'0':'')+s;
+  }
+  let scrubbing=false;
+  v.addEventListener('timeupdate',()=>{
+    if(scrubbing||!isFinite(v.duration)||!v.duration) return;
+    seek.value=Math.round(v.currentTime/v.duration*1000);
+    tCur.textContent=fmt(v.currentTime);
   });
+  seek.addEventListener('pointerdown',()=>{scrubbing=true;});
+  seek.addEventListener('input',()=>{
+    if(!isFinite(v.duration)||!v.duration) return;
+    const t=seek.value/1000*v.duration;
+    tCur.textContent=fmt(t);
+    v.currentTime=t;
+  });
+  const endScrub=()=>{scrubbing=false;};
+  seek.addEventListener('pointerup',endScrub);
+  seek.addEventListener('pointercancel',endScrub);
+  seek.addEventListener('change',endScrub);
+
+  /* ---------- normal playback toggle ---------- */
+  function setNormal(on){
+    normalMode=on;
+    normalBtn.textContent = on ? '傾き表示' : '通常再生';
+    normalBtn.classList.toggle('primary', on);
+    zoomEl.disabled=on;
+    gauge.classList.toggle('on', !on && gyroSeen);
+    dragOffX=dragOffY=0;
+    layout();
+    showHint(on?'通常再生に戻しました':'傾き表示に切り替えました',1400);
+  }
+  normalBtn.addEventListener('click',()=>setNormal(!normalMode));
 
   /* ---------- controls ---------- */
-  zoomEl.addEventListener('input', ()=>{ zoom=+zoomEl.value; zoomV.textContent=zoom.toFixed(2)+'\u00D7'; layout(); });
-  rangeEl.addEventListener('input', ()=>{ rangeDeg=+rangeEl.value; rangeV.textContent=rangeDeg+'\u00B0'; });
-  smoothEl.addEventListener('input', ()=>{ smooth=+smoothEl.value; smoothV.textContent=smooth.toFixed(2); });
-  useXEl.addEventListener('change', ()=>{ useX=useXEl.checked; });
+  zoomEl.addEventListener('input',()=>{ zoom=+zoomEl.value; zoomV.textContent=zoom.toFixed(2)+'\u00D7'; layout(); });
 
-  if(!document.documentElement.requestFullscreen && !stage.webkitRequestFullscreen){
-    fullBtn.hidden=true;                     // iPhone Safari has no Fullscreen API
+  if(!document.documentElement.requestFullscreen && !document.documentElement.webkitRequestFullscreen){
+    fullBtn.hidden=true;                       // iPhone Safari has no Fullscreen API
   }
-  fullBtn.addEventListener('click', ()=>{
+  fullBtn.addEventListener('click',()=>{
     if(document.fullscreenElement){ document.exitFullscreen(); return; }
     const el=document.documentElement;
     (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el);
   });
 
+  foldBtn.addEventListener('click',()=>{
+    const hidden=ctl.classList.toggle('hide');
+    foldBtn.textContent=hidden?'▴':'▾';
+    foldBtn.setAttribute('aria-expanded', String(!hidden));
+    setTimeout(layout,50);
+  });
+
   let hintT=null;
-  function showHint(msg, ms){
+  function showHint(msg,ms){
     hint.textContent=msg; hint.classList.add('on');
-    clearTimeout(hintT); hintT=setTimeout(()=>hint.classList.remove('on'), ms||2000);
+    clearTimeout(hintT); hintT=setTimeout(()=>hint.classList.remove('on'),ms||2000);
   }
 })();
 </script>
